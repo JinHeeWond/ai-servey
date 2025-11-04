@@ -92,30 +92,77 @@ function Survey({ onComplete, onReset }) {
     const isMultiSelect = multiSelectQuestions.includes(surveyId);
 
     if (isMultiSelect) {
-      // 중복 선택 가능한 질문
+      // 중복 선택 가능한 질문 - 즉시 투표 처리
       const currentSelections = votedSurveys[surveyId] || [];
-      const isSubmitted = votedSurveys[surveyId + '_submitted'] === true;
+      const isSelected = currentSelections.includes(optionId);
 
-      if (isSubmitted) {
-        return; // 이미 제출된 경우 선택 불가
-      }
+      try {
+        const sessionId = getSessionId();
 
-      let newSelections;
-      if (currentSelections.includes(optionId)) {
-        // 이미 선택됨 → 선택 해제
-        newSelections = currentSelections.filter(id => id !== optionId);
-      } else {
-        // 새로 선택
-        newSelections = [...currentSelections, optionId];
-      }
+        if (isSelected) {
+          // 이미 선택됨 → 선택 해제 및 투표 감소
+          await supabase.rpc('decrement_votes', { option_id: optionId });
+          await supabase
+            .from('votes')
+            .delete()
+            .eq('survey_id', surveyId)
+            .eq('option_id', optionId)
+            .eq('session_id', sessionId);
 
-      const newVotedSurveys = { ...votedSurveys, [surveyId]: newSelections };
-      setVotedSurveys(newVotedSurveys);
-      localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
+          const newSelections = currentSelections.filter(id => id !== optionId);
+          const newVotedSurveys = { ...votedSurveys, [surveyId]: newSelections };
+          setVotedSurveys(newVotedSurveys);
+          localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
 
-      // 자동 제출 로직
-      if (newSelections.length > 0) {
-        handleMultiSelectSubmit(surveyId, newSelections);
+          // UI 업데이트
+          const updatedSurveys = surveys.map(survey => {
+            if (survey.id === surveyId) {
+              return {
+                ...survey,
+                options: survey.options.map(option =>
+                  option.id === optionId
+                    ? { ...option, votes: Math.max(0, option.votes - 1) }
+                    : option
+                )
+              };
+            }
+            return survey;
+          });
+          setSurveys(updatedSurveys);
+
+        } else {
+          // 새로 선택 → 투표 추가
+          await supabase.rpc('increment_votes', { option_id: optionId });
+          await supabase.from('votes').insert([{
+            survey_id: surveyId,
+            option_id: optionId,
+            session_id: sessionId
+          }]);
+
+          const newSelections = [...currentSelections, optionId];
+          const newVotedSurveys = { ...votedSurveys, [surveyId]: newSelections };
+          setVotedSurveys(newVotedSurveys);
+          localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
+
+          // UI 업데이트
+          const updatedSurveys = surveys.map(survey => {
+            if (survey.id === surveyId) {
+              return {
+                ...survey,
+                options: survey.options.map(option =>
+                  option.id === optionId
+                    ? { ...option, votes: option.votes + 1 }
+                    : option
+                )
+              };
+            }
+            return survey;
+          });
+          setSurveys(updatedSurveys);
+        }
+      } catch (err) {
+        console.error('투표 중 오류 발생:', err);
+        alert('투표 중 오류가 발생했습니다. 다시 시도해주세요.');
       }
 
     } else {
@@ -189,57 +236,6 @@ function Survey({ onComplete, onReset }) {
     }
   };
 
-  const handleMultiSelectSubmit = async (surveyId, selectionsParam = null) => {
-    const selections = selectionsParam || votedSurveys[surveyId] || [];
-
-    // 이미 제출된 경우 중복 제출 방지
-    if (votedSurveys[surveyId + '_submitted']) {
-      return;
-    }
-
-    if (selections.length === 0) {
-      return;
-    }
-
-    try {
-      const sessionId = getSessionId();
-
-      for (const optionId of selections) {
-        await supabase.rpc('increment_votes', { option_id: optionId });
-        await supabase.from('votes').insert([{
-          survey_id: surveyId,
-          option_id: optionId,
-          session_id: sessionId
-        }]);
-      }
-
-      const updatedSurveys = surveys.map(survey => {
-        if (survey.id === surveyId) {
-          return {
-            ...survey,
-            options: survey.options.map(option =>
-              selections.includes(option.id)
-                ? { ...option, votes: option.votes + 1 }
-                : option
-            )
-          };
-        }
-        return survey;
-      });
-
-      setSurveys(updatedSurveys);
-
-      // 제출 완료 표시
-      const newVotedSurveys = { ...votedSurveys, [surveyId + '_submitted']: true };
-      setVotedSurveys(newVotedSurveys);
-      localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
-
-    } catch (err) {
-      console.error('투표 중 오류 발생:', err);
-      alert('투표 중 오류가 발생했습니다. 다시 시도해주세요.');
-    }
-  };
-
   const getTotalVotes = (options) => {
     return options.reduce((total, option) => total + option.votes, 0);
   };
@@ -255,7 +251,9 @@ function Survey({ onComplete, onReset }) {
     const completed = surveys.every(survey => {
       const isMultiSelect = multiSelectQuestions.includes(survey.id);
       if (isMultiSelect) {
-        return votedSurveys[survey.id + '_submitted'] === true;
+        // 중복 선택은 최소 1개 이상 선택되어 있으면 완료
+        const selections = votedSurveys[survey.id] || [];
+        return selections.length > 0;
       } else {
         return votedSurveys[survey.id] !== undefined;
       }
@@ -377,15 +375,14 @@ function Survey({ onComplete, onReset }) {
             const isMultiSelect = multiSelectQuestions.includes(survey.id);
             const totalVotes = getTotalVotes(survey.options);
 
-            let hasVoted;
             let currentSelections = [];
 
             if (isMultiSelect) {
-              hasVoted = votedSurveys[survey.id + '_submitted'] === true;
               currentSelections = votedSurveys[survey.id] || [];
-            } else {
-              hasVoted = votedSurveys[survey.id] !== undefined;
             }
+
+            // 중복 선택은 항상 변경 가능, 단일 선택도 항상 변경 가능
+            const hasVoted = false;
 
             return (
               <div key={survey.id} className="survey-card">
@@ -398,8 +395,6 @@ function Survey({ onComplete, onReset }) {
 
                 <div className="survey-options">
                   {survey.options.map((option) => {
-                    const percentage = getPercentage(option.votes, totalVotes);
-
                     let isSelected;
                     if (isMultiSelect) {
                       isSelected = currentSelections.includes(option.id);
@@ -410,8 +405,8 @@ function Survey({ onComplete, onReset }) {
                     return (
                       <div
                         key={option.id}
-                        className={`survey-option ${hasVoted ? 'voted' : ''} ${isSelected ? 'selected' : ''}`}
-                        onClick={() => !hasVoted && handleVote(survey.id, option.id)}
+                        className={`survey-option ${isSelected ? 'selected' : ''}`}
+                        onClick={() => handleVote(survey.id, option.id)}
                       >
                         <div className="option-content">
                           <span className="option-text">{option.text}</span>
@@ -420,12 +415,6 @@ function Survey({ onComplete, onReset }) {
                     );
                   })}
                 </div>
-
-                {hasVoted && (
-                  <div className="survey-footer">
-                    <span className="voted-badge">✓ 응답 완료</span>
-                  </div>
-                )}
               </div>
             );
           })}
