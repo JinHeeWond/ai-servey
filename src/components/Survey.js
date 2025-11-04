@@ -74,8 +74,6 @@ function Survey({ onComplete, onReset }) {
       setSurveys(formattedSurveys);
       setError(null);
     } catch (err) {
-      console.error('설문조사 데이터 로딩 실패:', err);
-      console.error('Error details:', JSON.stringify(err, null, 2));
       setError(`설문조사를 불러오는 중 오류가 발생했습니다. ${err.message || ''}`);
     } finally {
       setLoading(false);
@@ -150,7 +148,6 @@ function Survey({ onComplete, onReset }) {
           }]);
         }
       } catch (err) {
-        console.error('투표 중 오류 발생:', err);
         // 오류 발생 시 롤백
         setVotedSurveys(votedSurveys);
         localStorage.setItem('userVotes', JSON.stringify(votedSurveys));
@@ -212,7 +209,6 @@ function Survey({ onComplete, onReset }) {
           }]);
 
       } catch (err) {
-        console.error('투표 중 오류 발생:', err);
         // 오류 발생 시 롤백
         const rollbackVotedSurveys = { ...votedSurveys };
         if (previousOptionId) {
@@ -253,11 +249,6 @@ function Survey({ onComplete, onReset }) {
       }
     });
 
-    // 디버깅용 로그
-    console.log('설문조사 완료 상태:', completed);
-    console.log('투표 상태:', votedSurveys);
-    console.log('설문조사 수:', surveys.length);
-
     return completed;
   };
 
@@ -291,7 +282,6 @@ function Survey({ onComplete, onReset }) {
 
         alert('AI 꿀팁이 성공적으로 제출되었습니다!');
       } catch (err) {
-        console.error('AI 꿀팁 제출 중 오류 발생:', err);
         alert('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
       }
     }
