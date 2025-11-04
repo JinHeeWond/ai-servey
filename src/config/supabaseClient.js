@@ -1,11 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase 프로젝트 설정
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'https://hmoxxxmvdfkswqnnmqnu.supabase.co';
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhtb3h4eG12ZGZrc3dxbm5tcW51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIxNTM5OTIsImV4cCI6MjA3NzcyOTk5Mn0.jJN5Yd5nAsqN1pk_pmKHGXFmUoTCvAA6hj-BsJiIFTA';
+const supabaseUrl = 'https://hmoxxxmvdfkswqnnmqnu.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhtb3h4eG12ZGZrc3dxbm5tcW51Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIxNTM5OTIsImV4cCI6MjA3NzcyOTk5Mn0.jJN5Yd5nAsqN1pk_pmKHGXFmUoTCvAA6hj-BsJiIFTA';
 
 // 디버깅: Supabase 설정 확인
 console.log('Supabase URL:', supabaseUrl);
 console.log('Supabase Key (first 20 chars):', supabaseAnonKey?.substring(0, 20) + '...');
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Supabase 클라이언트 생성 with options
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false
+  }
+});
