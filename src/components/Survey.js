@@ -94,7 +94,11 @@ function Survey({ onComplete, onReset }) {
 
     if (isMultiSelect) {
       // 중복 선택 가능한 질문 - 즉시 UI 업데이트
-      const currentSelections = votedSurveys[surveyId] || [];
+      // 기존 데이터가 배열이 아니면 배열로 변환
+      let currentSelections = votedSurveys[surveyId] || [];
+      if (!Array.isArray(currentSelections)) {
+        currentSelections = currentSelections ? [currentSelections] : [];
+      }
       const isSelected = currentSelections.includes(optionId);
 
       // 즉시 UI 업데이트 (Optimistic Update)
@@ -371,7 +375,15 @@ function Survey({ onComplete, onReset }) {
             let currentSelections = [];
 
             if (isMultiSelect) {
-              currentSelections = votedSurveys[survey.id] || [];
+              // 기존 데이터가 배열이 아니면 배열로 변환
+              const stored = votedSurveys[survey.id];
+              if (Array.isArray(stored)) {
+                currentSelections = stored;
+              } else if (stored) {
+                currentSelections = [stored];
+              } else {
+                currentSelections = [];
+              }
             }
 
             // 중복 선택은 항상 변경 가능, 단일 선택도 항상 변경 가능
