@@ -144,7 +144,7 @@ body {
 }
 
 .hero-title-section {
-  padding: 5rem 2rem 3rem;
+  padding: 5rem 12% 3rem;
   text-align: center;
   background: #ffffff;
   border: none;
@@ -212,10 +212,43 @@ body {
   border: 0;
   outline: 0;
   object-fit: cover;
+  transform: scaleY(1.05);
+  transform-origin: center;
 }
 
 .intro-image:not(:first-child) {
-  margin-top: -20px;
+  margin-top: -3%;
+}
+
+.intro-image:first-child {
+  clip-path: inset(2% 0 2% 0);
+}
+
+.intro-image:nth-child(2) {
+  clip-path: inset(2% 0 2% 0);
+}
+
+.intro-image:last-child {
+  clip-path: inset(2% 0 0 0);
+}
+
+.intro-image:not(:first-child):not(:last-child) {
+  clip-path: inset(2% 0 2% 0);
+}
+
+.intro-image:nth-child(3) {
+  transform: scaleY(1.05) scaleX(1.15);
+  clip-path: inset(2% 7% 2% 7%);
+}
+
+.intro-image:nth-child(4) {
+  transform: scaleY(1.05) scaleX(1.15);
+  clip-path: inset(4% 7% 4% 7%);
+}
+
+.intro-image:nth-child(5) {
+  transform: scaleY(1.05) scaleX(1.15);
+  clip-path: inset(4% 4% 4% 4%);
 }
 
 .intro-button-container {
