@@ -75,7 +75,8 @@ function Survey({ onComplete, onReset }) {
       setError(null);
     } catch (err) {
       console.error('설문조사 데이터 로딩 실패:', err);
-      setError('설문조사를 불러오는 중 오류가 발생했습니다.');
+      console.error('Error details:', JSON.stringify(err, null, 2));
+      setError(`설문조사를 불러오는 중 오류가 발생했습니다. ${err.message || ''}`);
     } finally {
       setLoading(false);
     }
