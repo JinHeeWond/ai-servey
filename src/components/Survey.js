@@ -17,7 +17,7 @@ function Survey({ onComplete, onReset }) {
   const [tipsSubmitted, setTipsSubmitted] = useState(false);
 
   // 중복 선택 가능한 질문 ID
-  const multiSelectQuestions = [6]; // Q6: 잘못된 정보 경험 (중복 선택 가능)
+  const multiSelectQuestions = [3, 4, 6]; // Q3: AI 용도, Q4: 학습 경로, Q6: 잘못된 정보 경험
 
   // 세션 ID 생성 또는 가져오기
   const getSessionId = () => {
