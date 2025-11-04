@@ -294,6 +294,9 @@ function Survey({ onComplete, onReset }) {
 
     // 꿀팁 제출 여부와 상관없이 완료 처리
     setTipsSubmitted(true);
+
+    // 완료 페이지로 이동
+    onComplete();
   };
 
   if (loading) {
@@ -486,19 +489,6 @@ function Survey({ onComplete, onReset }) {
                 <span className="btn-icon">🎁</span>
               </button>
             </form>
-          </div>
-        )}
-
-        {allSurveysCompleted() && tipsSubmitted && (
-          <div className="show-result-section">
-            <button
-              className="show-result-btn"
-              onClick={onComplete}
-            >
-              <span className="btn-icon">⚔️</span>
-              제출하고 결과 보기
-              <span className="btn-icon">⚔️</span>
-            </button>
           </div>
         )}
       </div>
