@@ -64,14 +64,6 @@ function App() {
               <strong>'필승 AI 비급서'</strong>도 함께 받아가도록 하라!
             </p>
           </div>
-          <button
-            className="next-participant-btn"
-            onClick={resetToIntro}
-          >
-            <span className="btn-icon">◆</span>
-            다음 수련자
-            <span className="btn-icon">◆</span>
-          </button>
         </div>
       )}
     </div>
