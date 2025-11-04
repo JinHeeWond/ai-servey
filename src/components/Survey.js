@@ -92,15 +92,43 @@ function Survey({ onComplete, onReset }) {
     const isMultiSelect = multiSelectQuestions.includes(surveyId);
 
     if (isMultiSelect) {
-      // 중복 선택 가능한 질문 - 즉시 투표 처리
+      // 중복 선택 가능한 질문 - 즉시 UI 업데이트
       const currentSelections = votedSurveys[surveyId] || [];
       const isSelected = currentSelections.includes(optionId);
 
+      // 즉시 UI 업데이트 (Optimistic Update)
+      let newSelections;
+      if (isSelected) {
+        newSelections = currentSelections.filter(id => id !== optionId);
+      } else {
+        newSelections = [...currentSelections, optionId];
+      }
+
+      const newVotedSurveys = { ...votedSurveys, [surveyId]: newSelections };
+      setVotedSurveys(newVotedSurveys);
+      localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
+
+      // UI 투표 수 업데이트
+      const updatedSurveys = surveys.map(survey => {
+        if (survey.id === surveyId) {
+          return {
+            ...survey,
+            options: survey.options.map(option =>
+              option.id === optionId
+                ? { ...option, votes: isSelected ? Math.max(0, option.votes - 1) : option.votes + 1 }
+                : option
+            )
+          };
+        }
+        return survey;
+      });
+      setSurveys(updatedSurveys);
+
+      // 백그라운드에서 서버 업데이트
       try {
         const sessionId = getSessionId();
 
         if (isSelected) {
-          // 이미 선택됨 → 선택 해제 및 투표 감소
           await supabase.rpc('decrement_votes', { option_id: optionId });
           await supabase
             .from('votes')
@@ -108,85 +136,60 @@ function Survey({ onComplete, onReset }) {
             .eq('survey_id', surveyId)
             .eq('option_id', optionId)
             .eq('session_id', sessionId);
-
-          const newSelections = currentSelections.filter(id => id !== optionId);
-          const newVotedSurveys = { ...votedSurveys, [surveyId]: newSelections };
-          setVotedSurveys(newVotedSurveys);
-          localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
-
-          // UI 업데이트
-          const updatedSurveys = surveys.map(survey => {
-            if (survey.id === surveyId) {
-              return {
-                ...survey,
-                options: survey.options.map(option =>
-                  option.id === optionId
-                    ? { ...option, votes: Math.max(0, option.votes - 1) }
-                    : option
-                )
-              };
-            }
-            return survey;
-          });
-          setSurveys(updatedSurveys);
-
         } else {
-          // 새로 선택 → 투표 추가
           await supabase.rpc('increment_votes', { option_id: optionId });
           await supabase.from('votes').insert([{
             survey_id: surveyId,
             option_id: optionId,
             session_id: sessionId
           }]);
-
-          const newSelections = [...currentSelections, optionId];
-          const newVotedSurveys = { ...votedSurveys, [surveyId]: newSelections };
-          setVotedSurveys(newVotedSurveys);
-          localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
-
-          // UI 업데이트
-          const updatedSurveys = surveys.map(survey => {
-            if (survey.id === surveyId) {
-              return {
-                ...survey,
-                options: survey.options.map(option =>
-                  option.id === optionId
-                    ? { ...option, votes: option.votes + 1 }
-                    : option
-                )
-              };
-            }
-            return survey;
-          });
-          setSurveys(updatedSurveys);
         }
       } catch (err) {
         console.error('투표 중 오류 발생:', err);
+        // 오류 발생 시 롤백
+        setVotedSurveys(votedSurveys);
+        localStorage.setItem('userVotes', JSON.stringify(votedSurveys));
+        setSurveys(surveys);
         alert('투표 중 오류가 발생했습니다. 다시 시도해주세요.');
       }
 
     } else {
-      // 단일 선택 질문 - 답변 변경 가능
+      // 단일 선택 질문 - 즉시 UI 업데이트
       const previousOptionId = votedSurveys[surveyId];
 
+      // 즉시 UI 업데이트 (Optimistic Update)
+      const newVotedSurveys = { ...votedSurveys, [surveyId]: optionId };
+      setVotedSurveys(newVotedSurveys);
+      localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
+
+      const updatedSurveys = surveys.map(survey => {
+        if (survey.id === surveyId) {
+          return {
+            ...survey,
+            options: survey.options.map(option => {
+              if (option.id === optionId) {
+                return { ...option, votes: option.votes + 1 };
+              } else if (option.id === previousOptionId) {
+                return { ...option, votes: Math.max(0, option.votes - 1) };
+              }
+              return option;
+            })
+          };
+        }
+        return survey;
+      });
+      setSurveys(updatedSurveys);
+
+      // 백그라운드에서 서버 업데이트
       try {
-        // 새로운 선택에 투표
-        const { error: updateError } = await supabase.rpc('increment_votes', {
-          option_id: optionId
-        });
+        await supabase.rpc('increment_votes', { option_id: optionId });
 
-        if (updateError) throw updateError;
-
-        // 이전 선택이 있다면 투표 감소
         if (previousOptionId) {
-          await supabase.rpc('decrement_votes', {
-            option_id: previousOptionId
-          });
+          await supabase.rpc('decrement_votes', { option_id: previousOptionId });
         }
 
         const sessionId = getSessionId();
 
-        // 기존 투표 기록 삭제 (있다면)
         if (previousOptionId) {
           await supabase
             .from('votes')
@@ -195,8 +198,7 @@ function Survey({ onComplete, onReset }) {
             .eq('session_id', sessionId);
         }
 
-        // 새로운 투표 기록 추가
-        const { error: insertError } = await supabase
+        await supabase
           .from('votes')
           .insert([{
             survey_id: surveyId,
@@ -204,33 +206,20 @@ function Survey({ onComplete, onReset }) {
             session_id: sessionId
           }]);
 
-        if (insertError) throw insertError;
-
-        const updatedSurveys = surveys.map(survey => {
-          if (survey.id === surveyId) {
-            return {
-              ...survey,
-              options: survey.options.map(option => {
-                if (option.id === optionId) {
-                  return { ...option, votes: option.votes + 1 };
-                } else if (option.id === previousOptionId) {
-                  return { ...option, votes: Math.max(0, option.votes - 1) };
-                }
-                return option;
-              })
-            };
-          }
-          return survey;
-        });
-
-        setSurveys(updatedSurveys);
-
-        const newVotedSurveys = { ...votedSurveys, [surveyId]: optionId };
-        setVotedSurveys(newVotedSurveys);
-        localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
-
       } catch (err) {
         console.error('투표 중 오류 발생:', err);
+        // 오류 발생 시 롤백
+        const rollbackVotedSurveys = { ...votedSurveys };
+        if (previousOptionId) {
+          rollbackVotedSurveys[surveyId] = previousOptionId;
+        } else {
+          delete rollbackVotedSurveys[surveyId];
+        }
+        setVotedSurveys(rollbackVotedSurveys);
+        localStorage.setItem('userVotes', JSON.stringify(rollbackVotedSurveys));
+
+        // 서버에서 다시 데이터 가져오기
+        fetchSurveys();
         alert('투표 중 오류가 발생했습니다. 다시 시도해주세요.');
       }
     }
