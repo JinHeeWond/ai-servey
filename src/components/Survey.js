@@ -94,6 +94,11 @@ function Survey({ onComplete, onReset }) {
     if (isMultiSelect) {
       // 중복 선택 가능한 질문
       const currentSelections = votedSurveys[surveyId] || [];
+      const isSubmitted = votedSurveys[surveyId + '_submitted'] === true;
+
+      if (isSubmitted) {
+        return; // 이미 제출된 경우 선택 불가
+      }
 
       let newSelections;
       if (currentSelections.includes(optionId)) {
@@ -108,21 +113,42 @@ function Survey({ onComplete, onReset }) {
       setVotedSurveys(newVotedSurveys);
       localStorage.setItem('userVotes', JSON.stringify(newVotedSurveys));
 
-    } else {
-      // 단일 선택 질문
-      if (votedSurveys[surveyId]) {
-        alert('이미 투표하셨습니다!');
-        return;
+      // 자동 제출 로직
+      if (newSelections.length > 0) {
+        handleMultiSelectSubmit(surveyId, newSelections);
       }
 
+    } else {
+      // 단일 선택 질문 - 답변 변경 가능
+      const previousOptionId = votedSurveys[surveyId];
+
       try {
+        // 새로운 선택에 투표
         const { error: updateError } = await supabase.rpc('increment_votes', {
           option_id: optionId
         });
 
         if (updateError) throw updateError;
 
+        // 이전 선택이 있다면 투표 감소
+        if (previousOptionId) {
+          await supabase.rpc('decrement_votes', {
+            option_id: previousOptionId
+          });
+        }
+
         const sessionId = getSessionId();
+
+        // 기존 투표 기록 삭제 (있다면)
+        if (previousOptionId) {
+          await supabase
+            .from('votes')
+            .delete()
+            .eq('survey_id', surveyId)
+            .eq('session_id', sessionId);
+        }
+
+        // 새로운 투표 기록 추가
         const { error: insertError } = await supabase
           .from('votes')
           .insert([{
@@ -137,11 +163,14 @@ function Survey({ onComplete, onReset }) {
           if (survey.id === surveyId) {
             return {
               ...survey,
-              options: survey.options.map(option =>
-                option.id === optionId
-                  ? { ...option, votes: option.votes + 1 }
-                  : option
-              )
+              options: survey.options.map(option => {
+                if (option.id === optionId) {
+                  return { ...option, votes: option.votes + 1 };
+                } else if (option.id === previousOptionId) {
+                  return { ...option, votes: Math.max(0, option.votes - 1) };
+                }
+                return option;
+              })
             };
           }
           return survey;
@@ -160,11 +189,15 @@ function Survey({ onComplete, onReset }) {
     }
   };
 
-  const handleMultiSelectSubmit = async (surveyId) => {
-    const selections = votedSurveys[surveyId] || [];
+  const handleMultiSelectSubmit = async (surveyId, selectionsParam = null) => {
+    const selections = selectionsParam || votedSurveys[surveyId] || [];
+
+    // 이미 제출된 경우 중복 제출 방지
+    if (votedSurveys[surveyId + '_submitted']) {
+      return;
+    }
 
     if (selections.length === 0) {
-      alert('최소 1개 이상 선택해주세요!');
       return;
     }
 
@@ -239,34 +272,40 @@ function Survey({ onComplete, onReset }) {
   const handleAiTipsSubmit = async (e) => {
     e.preventDefault();
 
-    // 필수 필드 검증
-    if (!aiTips.tipName || !aiTips.targetUsers || !aiTips.aiTool || !aiTips.tipDescription) {
-      alert('모든 항목을 입력해주세요!');
-      return;
+    // 꿀팁을 작성한 경우에만 제출
+    const hasTipContent = aiTips.tipName || aiTips.targetUsers || aiTips.aiTool || aiTips.tipDescription;
+
+    if (hasTipContent) {
+      // 일부만 작성한 경우 모두 작성하도록 안내
+      if (!aiTips.tipName || !aiTips.targetUsers || !aiTips.aiTool || !aiTips.tipDescription) {
+        alert('꿀팁을 제출하려면 모든 항목을 입력해주세요!\n(작성하지 않고 넘어가려면 모든 필드를 비워두세요)');
+        return;
+      }
+
+      try {
+        const sessionId = getSessionId();
+
+        const { error: insertError } = await supabase
+          .from('ai_tips')
+          .insert([{
+            tip_name: aiTips.tipName,
+            target_users: aiTips.targetUsers,
+            ai_tool: aiTips.aiTool,
+            tip_description: aiTips.tipDescription,
+            session_id: sessionId
+          }]);
+
+        if (insertError) throw insertError;
+
+        alert('AI 꿀팁이 성공적으로 제출되었습니다!');
+      } catch (err) {
+        console.error('AI 꿀팁 제출 중 오류 발생:', err);
+        alert('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
+      }
     }
 
-    try {
-      const sessionId = getSessionId();
-
-      const { error: insertError } = await supabase
-        .from('ai_tips')
-        .insert([{
-          tip_name: aiTips.tipName,
-          target_users: aiTips.targetUsers,
-          ai_tool: aiTips.aiTool,
-          tip_description: aiTips.tipDescription,
-          session_id: sessionId
-        }]);
-
-      if (insertError) throw insertError;
-
-      setTipsSubmitted(true);
-      alert('AI 꿀팁이 성공적으로 제출되었습니다!');
-
-    } catch (err) {
-      console.error('AI 꿀팁 제출 중 오류 발생:', err);
-      alert('제출 중 오류가 발생했습니다. 다시 시도해주세요.');
-    }
+    // 꿀팁 제출 여부와 상관없이 완료 처리
+    setTipsSubmitted(true);
   };
 
   if (loading) {
@@ -382,17 +421,6 @@ function Survey({ onComplete, onReset }) {
                   })}
                 </div>
 
-                {isMultiSelect && !hasVoted && currentSelections.length > 0 && (
-                  <div className="multi-select-submit">
-                    <button
-                      className="submit-multi-select-btn"
-                      onClick={() => handleMultiSelectSubmit(survey.id)}
-                    >
-                      선택 완료 ({currentSelections.length}개 선택됨)
-                    </button>
-                  </div>
-                )}
-
                 {hasVoted && (
                   <div className="survey-footer">
                     <span className="voted-badge">✓ 응답 완료</span>
@@ -406,17 +434,18 @@ function Survey({ onComplete, onReset }) {
         {allSurveysCompleted() && !tipsSubmitted && (
           <div className="ai-tips-section">
             <div className="ai-tips-header">
-              <h3>🎁 제 4장: 그대의 꿀팁을 천하에 알려라!</h3>
+              <h3>🎁 제 4장: 그대의 꿀팁을 천하에 알려라! (선택사항)</h3>
               <p className="ai-tips-intro">
                 그대의 'AI 꿀팁'을 자랑하라!<br/>
-                우수 팁을 공유한 자, <strong>추첨을 통해 특별한 선물</strong>을 하사한다!
+                우수 팁을 공유한 자, <strong>추첨을 통해 특별한 선물</strong>을 하사한다!<br/>
+                <em style={{ fontSize: '0.9em', color: '#666' }}>(작성하지 않고 넘어갈 수도 있습니다)</em>
               </p>
             </div>
 
             <form onSubmit={handleAiTipsSubmit} className="ai-tips-form">
               <div className="form-group">
                 <label htmlFor="tipName">
-                  Q10. [필수] 그대의 'AI 꿀팁'에 멋진 이름을 붙여보라.
+                  Q10. [선택] 그대의 'AI 꿀팁'에 멋진 이름을 붙여보라.
                   <span className="label-hint">(예: 5분 만에 보고서 초안 완성술, AI로 조별과제 PPT 뼈대 만들기)</span>
                 </label>
                 <input
@@ -425,13 +454,12 @@ function Survey({ onComplete, onReset }) {
                   value={aiTips.tipName}
                   onChange={(e) => setAiTips({ ...aiTips, tipName: e.target.value })}
                   placeholder="AI 꿀팁 제목"
-                  required
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="targetUsers">
-                  Q11. [필수] 이 꿀팁은 어떤 사람들에게 특히 유용한가?
+                  Q11. [선택] 이 꿀팁은 어떤 사람들에게 특히 유용한가?
                   <span className="label-hint">(예: 모든 대학생, 기획자 등)</span>
                 </label>
                 <input
@@ -440,13 +468,12 @@ function Survey({ onComplete, onReset }) {
                   value={aiTips.targetUsers}
                   onChange={(e) => setAiTips({ ...aiTips, targetUsers: e.target.value })}
                   placeholder="대상 사용자"
-                  required
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="aiTool">
-                  Q12. [필수] 어떤 AI 툴을 사용했는가?
+                  Q12. [선택] 어떤 AI 툴을 사용했는가?
                   <span className="label-hint">(예: ChatGPT, Midjourney 등)</span>
                 </label>
                 <input
@@ -455,13 +482,12 @@ function Survey({ onComplete, onReset }) {
                   value={aiTips.aiTool}
                   onChange={(e) => setAiTips({ ...aiTips, aiTool: e.target.value })}
                   placeholder="사용한 AI 툴 이름"
-                  required
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="tipDescription">
-                  Q13. [필수] 꿀팁 사용법을 상세히 공유하라. (과정, 사용한 질문/명령어 등)
+                  Q13. [선택] 꿀팁 사용법을 상세히 공유하라. (과정, 사용한 질문/명령어 등)
                   <span className="label-hint">
                     가이드: "어떤 상황에서", "어떻게 질문(명령어)을 입력했는지", "어떤 결과가 나왔는지" 자세히 적어줄수록 당첨 확률이 높아진다!
                   </span>
@@ -472,13 +498,12 @@ function Survey({ onComplete, onReset }) {
                   onChange={(e) => setAiTips({ ...aiTips, tipDescription: e.target.value })}
                   placeholder="상황, 질문/명령어, 결과를 구체적으로 작성해주세요..."
                   rows="8"
-                  required
                 />
               </div>
 
               <button type="submit" className="submit-tips-btn">
                 <span className="btn-icon">🎁</span>
-                꿀팁 제출하고 추첨 참여하기
+                제출하고 결과 보기
                 <span className="btn-icon">🎁</span>
               </button>
             </form>
