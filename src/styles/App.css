@@ -215,7 +215,7 @@ body {
 }
 
 .intro-image:not(:first-child) {
-  margin-top: -10px;
+  margin-top: -20px;
 }
 
 .intro-button-container {
