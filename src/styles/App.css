@@ -214,6 +214,10 @@ body {
   object-fit: cover;
 }
 
+.intro-image:not(:first-child) {
+  margin-top: -5px;
+}
+
 .intro-button-container {
   padding: 4rem 2rem;
   text-align: center;
