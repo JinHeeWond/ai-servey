@@ -12,13 +12,12 @@ function Hero({ onStartSurvey }) {
 
       <div className="intro-images-container">
         {images.map((imageNum) => (
-          <div key={imageNum} className="intro-image-wrapper">
-            <img
-              src={`/images/${imageNum}.png`}
-              alt={`AI 무공 비급 ${imageNum}`}
-              className="intro-image"
-            />
-          </div>
+          <img
+            key={imageNum}
+            src={`/images/${imageNum}.png`}
+            alt={`AI 무공 비급 ${imageNum}`}
+            className="intro-image"
+          />
         ))}
       </div>
 
