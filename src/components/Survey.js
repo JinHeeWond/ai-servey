@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabaseClient';
+import { translations } from '../config/translations';
 
 function Survey({ onComplete, onReset }) {
   const [surveys, setSurveys] = useState([]);
   const [votedSurveys, setVotedSurveys] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [language, setLanguage] = useState(() => {
+    return localStorage.getItem('preferredLanguage') || 'ko';
+  });
 
   // AI 꿀팁 입력 필드 (Q10-Q13)
   const [aiTips, setAiTips] = useState({
@@ -28,6 +32,16 @@ function Survey({ onComplete, onReset }) {
     }
     return sessionId;
   };
+
+  // 언어 전환 함수
+  const toggleLanguage = () => {
+    const newLang = language === 'ko' ? 'en' : 'ko';
+    setLanguage(newLang);
+    localStorage.setItem('preferredLanguage', newLang);
+  };
+
+  // 현재 언어의 번역 가져오기
+  const t = translations[language];
 
   useEffect(() => {
     fetchSurveys();
@@ -74,7 +88,7 @@ function Survey({ onComplete, onReset }) {
       setSurveys(formattedSurveys);
       setError(null);
     } catch (err) {
-      setError(`설문조사를 불러오는 중 오류가 발생했습니다. ${err.message || ''}`);
+      setError(`${t.ui.error} ${err.message || ''}`);
     } finally {
       setLoading(false);
     }
@@ -226,15 +240,6 @@ function Survey({ onComplete, onReset }) {
     }
   };
 
-  const getTotalVotes = (options) => {
-    return options.reduce((total, option) => total + option.votes, 0);
-  };
-
-  const getPercentage = (votes, total) => {
-    if (total === 0) return 0;
-    return ((votes / total) * 100).toFixed(1);
-  };
-
   const allSurveysCompleted = () => {
     if (surveys.length === 0) return false;
 
@@ -304,10 +309,10 @@ function Survey({ onComplete, onReset }) {
             <circle cx="40" cy="35" r="3" fill="currentColor"/>
             <circle cx="40" cy="45" r="3" fill="currentColor"/>
           </svg>
-          <h2>수련자의 길</h2>
+          <h2>{language === 'ko' ? '수련자의 길' : 'Path of the Practitioner'}</h2>
         </div>
         <div className="card-content">
-          <p className="survey-intro">설문조사를 불러오는 중...</p>
+          <p className="survey-intro">{t.ui.loading}</p>
         </div>
       </section>
     );
@@ -324,11 +329,11 @@ function Survey({ onComplete, onReset }) {
             <circle cx="40" cy="35" r="3" fill="currentColor"/>
             <circle cx="40" cy="45" r="3" fill="currentColor"/>
           </svg>
-          <h2>수련자의 길</h2>
+          <h2>{language === 'ko' ? '수련자의 길' : 'Path of the Practitioner'}</h2>
         </div>
         <div className="card-content">
           <p className="survey-intro" style={{ color: '#8B0000' }}>{error}</p>
-          <p className="survey-intro">Supabase 설정을 확인해주세요.</p>
+          <p className="survey-intro">{t.ui.checkSupabase}</p>
         </div>
       </section>
     );
@@ -346,21 +351,34 @@ function Survey({ onComplete, onReset }) {
           <circle cx="40" cy="45" r="3" fill="currentColor"/>
           <circle cx="40" cy="55" r="3" fill="currentColor"/>
         </svg>
-        <h2>수련자의 길</h2>
+        <h2>{language === 'ko' ? '수련자의 길' : 'Path of the Practitioner'}</h2>
+        <button className="language-toggle-btn" onClick={toggleLanguage}>
+          {t.ui.languageToggle}
+        </button>
       </div>
 
       <div className="card-content">
         <p className="survey-intro">
-          AI라는 거대한 힘이 강호를 뒤흔들고 있습니다.<br/>
-          이 힘을 어떻게 다루느냐에 따라 그대의 무공 수준이 결정될 것입니다.<br/><br/>
-          지금부터 그대의 수련 상태를 점검합니다.<br/>
-          각 문항에 솔직히 답하면, <strong>신비한 환단</strong>과 <strong>필승 AI 비급서</strong>를 선물로 드리겠습니다.
+          {language === 'ko' ? (
+            <>
+              AI라는 거대한 힘이 강호를 뒤흔들고 있습니다.<br/>
+              이 힘을 어떻게 다루느냐에 따라 그대의 무공 수준이 결정될 것입니다.<br/><br/>
+              지금부터 그대의 수련 상태를 점검합니다.<br/>
+              각 문항에 솔직히 답하면, <strong>신비한 환단</strong>과 <strong>필승 AI 비급서</strong>를 선물로 드리겠습니다.
+            </>
+          ) : (
+            <>
+              The immense power of AI is shaking the martial world.<br/>
+              Your martial arts level will be determined by how you handle this power.<br/><br/>
+              Let's check your training status now.<br/>
+              Answer each question honestly, and we'll provide you with <strong>mysterious wisdom</strong> and <strong>essential AI secrets</strong>.
+            </>
+          )}
         </p>
 
         <div className="surveys-container">
           {surveys.map((survey) => {
             const isMultiSelect = multiSelectQuestions.includes(survey.id);
-            const totalVotes = getTotalVotes(survey.options);
 
             let currentSelections = [];
 
@@ -376,26 +394,26 @@ function Survey({ onComplete, onReset }) {
               }
             }
 
-            // 중복 선택은 항상 변경 가능, 단일 선택도 항상 변경 가능
-            const hasVoted = false;
-
             return (
               <div key={survey.id} className="survey-card">
                 <div className="survey-header">
-                  <h3>Q{survey.id}. {survey.question}</h3>
-                  {survey.description && (
-                    <p className="survey-description">{survey.description}</p>
+                  <h3>{t.questions[survey.id]?.question || survey.question}</h3>
+                  {t.questions[survey.id]?.description && (
+                    <p className="survey-description">{t.questions[survey.id].description}</p>
                   )}
                 </div>
 
                 <div className="survey-options">
-                  {survey.options.map((option) => {
+                  {survey.options.map((option, index) => {
                     let isSelected;
                     if (isMultiSelect) {
                       isSelected = currentSelections.includes(option.id);
                     } else {
                       isSelected = votedSurveys[survey.id] === option.id;
                     }
+
+                    // 번역된 옵션 텍스트 가져오기
+                    const translatedText = t.questions[survey.id]?.options?.[index] || option.text;
 
                     return (
                       <div
@@ -404,7 +422,7 @@ function Survey({ onComplete, onReset }) {
                         onClick={() => handleVote(survey.id, option.id)}
                       >
                         <div className="option-content">
-                          <span className="option-text">{option.text}</span>
+                          <span className="option-text">{translatedText}</span>
                         </div>
                       </div>
                     );
@@ -418,76 +436,80 @@ function Survey({ onComplete, onReset }) {
         {allSurveysCompleted() && !tipsSubmitted && (
           <div className="ai-tips-section">
             <div className="ai-tips-header">
-              <h3>🎁 제 4장: 그대의 꿀팁을 천하에 알려라! (선택사항)</h3>
+              <h3>{t.ui.aiTipsTitle}</h3>
               <p className="ai-tips-intro">
-                그대의 'AI 꿀팁'을 자랑하라!<br/>
-                우수 팁을 공유한 자, <strong>추첨을 통해 특별한 선물</strong>을 하사한다!<br/>
-                <em style={{ fontSize: '0.9em', color: '#666' }}>(작성하지 않고 넘어갈 수도 있습니다)</em>
+                {language === 'ko' ? (
+                  <>
+                    그대의 'AI 꿀팁'을 자랑하라!<br/>
+                    우수 팁을 공유한 자, <strong>추첨을 통해 특별한 선물</strong>을 하사한다!<br/>
+                    <em style={{ fontSize: '0.9em', color: '#666' }}>(작성하지 않고 넘어갈 수도 있습니다)</em>
+                  </>
+                ) : (
+                  <>
+                    Share your AI tips!<br/>
+                    Those who share excellent tips will receive <strong>special gifts through a lottery</strong>!<br/>
+                    <em style={{ fontSize: '0.9em', color: '#666' }}>(You can skip this section)</em>
+                  </>
+                )}
               </p>
             </div>
 
             <form onSubmit={handleAiTipsSubmit} className="ai-tips-form">
               <div className="form-group">
                 <label htmlFor="tipName">
-                  Q10. [선택] 그대의 'AI 꿀팁'에 멋진 이름을 붙여보라.
-                  <span className="label-hint">(예: 5분 만에 보고서 초안 완성술, AI로 조별과제 PPT 뼈대 만들기)</span>
+                  {t.ui.tipNameLabel}
                 </label>
                 <input
                   type="text"
                   id="tipName"
                   value={aiTips.tipName}
                   onChange={(e) => setAiTips({ ...aiTips, tipName: e.target.value })}
-                  placeholder="AI 꿀팁 제목"
+                  placeholder={t.ui.tipNamePlaceholder}
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="targetUsers">
-                  Q11. [선택] 이 꿀팁은 어떤 사람들에게 특히 유용한가?
-                  <span className="label-hint">(예: 모든 대학생, 기획자 등)</span>
+                  {t.ui.targetUsersLabel}
                 </label>
                 <input
                   type="text"
                   id="targetUsers"
                   value={aiTips.targetUsers}
                   onChange={(e) => setAiTips({ ...aiTips, targetUsers: e.target.value })}
-                  placeholder="대상 사용자"
+                  placeholder={t.ui.targetUsersPlaceholder}
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="aiTool">
-                  Q12. [선택] 어떤 AI 툴을 사용했는가?
-                  <span className="label-hint">(예: ChatGPT, Midjourney 등)</span>
+                  {t.ui.aiToolLabel}
                 </label>
                 <input
                   type="text"
                   id="aiTool"
                   value={aiTips.aiTool}
                   onChange={(e) => setAiTips({ ...aiTips, aiTool: e.target.value })}
-                  placeholder="사용한 AI 툴 이름"
+                  placeholder={t.ui.aiToolPlaceholder}
                 />
               </div>
 
               <div className="form-group">
                 <label htmlFor="tipDescription">
-                  Q13. [선택] 꿀팁 사용법을 상세히 공유하라. (과정, 사용한 질문/명령어 등)
-                  <span className="label-hint">
-                    가이드: "어떤 상황에서", "어떻게 질문(명령어)을 입력했는지", "어떤 결과가 나왔는지" 자세히 적어줄수록 당첨 확률이 높아진다!
-                  </span>
+                  {t.ui.tipDescriptionLabel}
                 </label>
                 <textarea
                   id="tipDescription"
                   value={aiTips.tipDescription}
                   onChange={(e) => setAiTips({ ...aiTips, tipDescription: e.target.value })}
-                  placeholder="상황, 질문/명령어, 결과를 구체적으로 작성해주세요..."
+                  placeholder={t.ui.tipDescriptionPlaceholder}
                   rows="8"
                 />
               </div>
 
               <button type="submit" className="submit-tips-btn">
                 <span className="btn-icon">🎁</span>
-                제출하고 결과 보기
+                {t.ui.submitResults}
                 <span className="btn-icon">🎁</span>
               </button>
             </form>

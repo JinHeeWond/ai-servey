@@ -555,6 +555,32 @@ body {
   background: linear-gradient(90deg, #1a1a1a 0%, transparent 100%);
 }
 
+/* Language Toggle Button */
+.language-toggle-btn {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1a1a1a;
+  color: #ffffff;
+  padding: 0.5rem 1.2rem;
+  border: 2px solid #1a1a1a;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Noto Sans JP', 'Noto Sans KR', sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.language-toggle-btn:hover {
+  background: #ffffff;
+  color: #1a1a1a;
+  transform: translateY(-50%) scale(1.05);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
 .section-icon {
   width: 60px;
   height: 60px;
